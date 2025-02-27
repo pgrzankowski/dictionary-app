@@ -40,6 +40,7 @@ type Config struct {
 
 type ResolverRoot interface {
 	Mutation() MutationResolver
+	Query() QueryResolver
 }
 
 type DirectiveRoot struct {
@@ -57,6 +58,7 @@ type ComplexityRoot struct {
 	Mutation struct {
 		CreateTranslation func(childComplexity int, input model.NewTranslationInput) int
 		RemoveTranslation func(childComplexity int, id string) int
+		UpdateTranslation func(childComplexity int, input model.UpdateTranslationInput) int
 	}
 
 	PolishWord struct {
@@ -68,6 +70,8 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		Translation  func(childComplexity int, id string) int
+		Translations func(childComplexity int) int
 	}
 
 	Translation struct {
@@ -83,6 +87,11 @@ type ComplexityRoot struct {
 type MutationResolver interface {
 	CreateTranslation(ctx context.Context, input model.NewTranslationInput) (*model.Translation, error)
 	RemoveTranslation(ctx context.Context, id string) (bool, error)
+	UpdateTranslation(ctx context.Context, input model.UpdateTranslationInput) (*model.Translation, error)
+}
+type QueryResolver interface {
+	Translations(ctx context.Context) ([]*model.Translation, error)
+	Translation(ctx context.Context, id string) (*model.Translation, error)
 }
 
 type executableSchema struct {
@@ -163,6 +172,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.RemoveTranslation(childComplexity, args["id"].(string)), true
 
+	case "Mutation.updateTranslation":
+		if e.complexity.Mutation.UpdateTranslation == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateTranslation_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.UpdateTranslation(childComplexity, args["input"].(model.UpdateTranslationInput)), true
+
 	case "PolishWord.createdAt":
 		if e.complexity.PolishWord.CreatedAt == nil {
 			break
@@ -197,6 +218,25 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.PolishWord.Word(childComplexity), true
+
+	case "Query.translation":
+		if e.complexity.Query.Translation == nil {
+			break
+		}
+
+		args, err := ec.field_Query_translation_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Translation(childComplexity, args["id"].(string)), true
+
+	case "Query.translations":
+		if e.complexity.Query.Translations == nil {
+			break
+		}
+
+		return e.complexity.Query.Translations(childComplexity), true
 
 	case "Translation.createdAt":
 		if e.complexity.Translation.CreatedAt == nil {
@@ -250,6 +290,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputNewExampleInput,
 		ec.unmarshalInputNewTranslationInput,
+		ec.unmarshalInputUpdateTranslationInput,
 	)
 	first := true
 
@@ -412,6 +453,29 @@ func (ec *executionContext) field_Mutation_removeTranslation_argsID(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Mutation_updateTranslation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_updateTranslation_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_updateTranslation_argsInput(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (model.UpdateTranslationInput, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+	if tmp, ok := rawArgs["input"]; ok {
+		return ec.unmarshalNUpdateTranslationInput2githubᚗcomᚋpgrzankowskiᚋdictionaryᚑappᚋgraphᚋmodelᚐUpdateTranslationInput(ctx, tmp)
+	}
+
+	var zeroVal model.UpdateTranslationInput
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -429,6 +493,29 @@ func (ec *executionContext) field_Query___type_argsName(
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
 	if tmp, ok := rawArgs["name"]; ok {
 		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_translation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query_translation_argsID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_translation_argsID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+	if tmp, ok := rawArgs["id"]; ok {
+		return ec.unmarshalNID2string(ctx, tmp)
 	}
 
 	var zeroVal string
@@ -893,6 +980,75 @@ func (ec *executionContext) fieldContext_Mutation_removeTranslation(ctx context.
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_updateTranslation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_updateTranslation(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().UpdateTranslation(rctx, fc.Args["input"].(model.UpdateTranslationInput))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Translation)
+	fc.Result = res
+	return ec.marshalNTranslation2ᚖgithubᚗcomᚋpgrzankowskiᚋdictionaryᚑappᚋgraphᚋmodelᚐTranslation(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_updateTranslation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Translation_id(ctx, field)
+			case "englishWord":
+				return ec.fieldContext_Translation_englishWord(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Translation_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Translation_updatedAt(ctx, field)
+			case "polishWord":
+				return ec.fieldContext_Translation_polishWord(ctx, field)
+			case "examples":
+				return ec.fieldContext_Translation_examples(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Translation", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateTranslation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _PolishWord_id(ctx context.Context, field graphql.CollectedField, obj *model.PolishWord) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_PolishWord_id(ctx, field)
 	if err != nil {
@@ -1123,6 +1279,130 @@ func (ec *executionContext) fieldContext_PolishWord_translations(_ context.Conte
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Translation", field.Name)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_translations(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_translations(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Translations(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.Translation)
+	fc.Result = res
+	return ec.marshalNTranslation2ᚕᚖgithubᚗcomᚋpgrzankowskiᚋdictionaryᚑappᚋgraphᚋmodelᚐTranslationᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_translations(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Translation_id(ctx, field)
+			case "englishWord":
+				return ec.fieldContext_Translation_englishWord(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Translation_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Translation_updatedAt(ctx, field)
+			case "polishWord":
+				return ec.fieldContext_Translation_polishWord(ctx, field)
+			case "examples":
+				return ec.fieldContext_Translation_examples(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Translation", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_translation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_translation(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Translation(rctx, fc.Args["id"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.Translation)
+	fc.Result = res
+	return ec.marshalOTranslation2ᚖgithubᚗcomᚋpgrzankowskiᚋdictionaryᚑappᚋgraphᚋmodelᚐTranslation(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_translation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Translation_id(ctx, field)
+			case "englishWord":
+				return ec.fieldContext_Translation_englishWord(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Translation_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Translation_updatedAt(ctx, field)
+			case "polishWord":
+				return ec.fieldContext_Translation_polishWord(ctx, field)
+			case "examples":
+				return ec.fieldContext_Translation_examples(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Translation", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_translation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -3565,6 +3845,40 @@ func (ec *executionContext) unmarshalInputNewTranslationInput(ctx context.Contex
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputUpdateTranslationInput(ctx context.Context, obj any) (model.UpdateTranslationInput, error) {
+	var it model.UpdateTranslationInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"id", "englishWord"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "id":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ID = data
+		case "englishWord":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("englishWord"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.EnglishWord = data
+		}
+	}
+
+	return it, nil
+}
+
 // endregion **************************** input.gotpl *****************************
 
 // region    ************************** interface.gotpl ***************************
@@ -3661,6 +3975,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "removeTranslation":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_removeTranslation(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateTranslation":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateTranslation(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -3766,6 +4087,47 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Query")
+		case "translations":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_translations(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "translation":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_translation(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -4388,6 +4750,11 @@ func (ec *executionContext) marshalNTranslation2ᚖgithubᚗcomᚋpgrzankowski�
 	return ec._Translation(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNUpdateTranslationInput2githubᚗcomᚋpgrzankowskiᚋdictionaryᚑappᚋgraphᚋmodelᚐUpdateTranslationInput(ctx context.Context, v any) (model.UpdateTranslationInput, error) {
+	res, err := ec.unmarshalInputUpdateTranslationInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v introspection.Directive) graphql.Marshaler {
 	return ec.___Directive(ctx, sel, &v)
 }
@@ -4701,6 +5068,13 @@ func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel as
 	}
 	res := graphql.MarshalString(*v)
 	return res
+}
+
+func (ec *executionContext) marshalOTranslation2ᚖgithubᚗcomᚋpgrzankowskiᚋdictionaryᚑappᚋgraphᚋmodelᚐTranslation(ctx context.Context, sel ast.SelectionSet, v *model.Translation) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Translation(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalO__EnumValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐEnumValueᚄ(ctx context.Context, sel ast.SelectionSet, v []introspection.EnumValue) graphql.Marshaler {

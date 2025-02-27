@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/pgrzankowski/dictionary-app/db"
 	"github.com/pgrzankowski/dictionary-app/graph/model"
@@ -87,7 +88,54 @@ func (r *mutationResolver) RemoveTranslation(ctx context.Context, id string) (bo
 	return rowsAffected > 0, nil
 }
 
+// UpdateTranslation is the resolver for the updateTranslation field.
+func (r *mutationResolver) UpdateTranslation(ctx context.Context, input model.UpdateTranslationInput) (*model.Translation, error) {
+	intID, err := strconv.Atoi(input.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid id: %v", err)
+	}
+
+	if input.EnglishWord != nil {
+		_, err := db.DB.ExecContext(ctx,
+			"UPDATE translations SET english_word = $1, updated_at = NOW() WHERE id = $2",
+			*input.EnglishWord, intID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var englishWord string
+	var createdAt, updatedAt time.Time
+	err = db.DB.QueryRowContext(ctx,
+		"SELECT english_word, created_at, updated_at FROM translations WHERE id = $1", intID).
+		Scan(&englishWord, &createdAt, &updatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.Translation{
+		ID:          input.ID,
+		EnglishWord: englishWord,
+		CreatedAt:   createdAt.String(),
+		UpdatedAt:   updatedAt.String(),
+	}, nil
+}
+
+// Translations is the resolver for the translations field.
+func (r *queryResolver) Translations(ctx context.Context) ([]*model.Translation, error) {
+	panic(fmt.Errorf("not implemented: Translations - translations"))
+}
+
+// Translation is the resolver for the translation field.
+func (r *queryResolver) Translation(ctx context.Context, id string) (*model.Translation, error) {
+	panic(fmt.Errorf("not implemented: Translation - translation"))
+}
+
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
+// Query returns QueryResolver implementation.
+func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
+
 type mutationResolver struct{ *Resolver }
+type queryResolver struct{ *Resolver }

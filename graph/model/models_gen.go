@@ -42,3 +42,8 @@ type Translation struct {
 	PolishWord  *PolishWord `json:"polishWord"`
 	Examples    []*Example  `json:"examples"`
 }
+
+type UpdateTranslationInput struct {
+	ID          string  `json:"id"`
+	EnglishWord *string `json:"englishWord,omitempty"`
+}

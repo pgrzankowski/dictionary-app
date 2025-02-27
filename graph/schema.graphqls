@@ -39,8 +39,18 @@ input NewTranslationInput {
   examples: [NewExampleInput!]
 }
 
+input UpdateTranslationInput {
+  id: ID!
+  englishWord: String
+}
+
+type Query {
+  translations: [Translation!]!
+  translation(id: ID!): Translation
+}
 
 type Mutation {
   createTranslation(input: NewTranslationInput!): Translation!
   removeTranslation(id: ID!): Boolean!
+  updateTranslation(input: UpdateTranslationInput!): Translation!
 }
