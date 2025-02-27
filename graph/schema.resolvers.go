@@ -6,26 +6,88 @@ package graph
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"strconv"
 
+	"github.com/pgrzankowski/dictionary-app/db"
 	"github.com/pgrzankowski/dictionary-app/graph/model"
 )
 
-// CreateTodo is the resolver for the createTodo field.
-func (r *mutationResolver) CreateTodo(ctx context.Context, input model.NewTodo) (*model.Todo, error) {
-	panic(fmt.Errorf("not implemented: CreateTodo - createTodo"))
+// CreateTranslation is the resolver for the createTranslation field.
+func (r *mutationResolver) CreateTranslation(ctx context.Context, input model.NewTranslationInput) (*model.Translation, error) {
+	var polishID int
+	err := db.DB.QueryRowContext(
+		ctx,
+		"SELECT id FROM polish_words WHERE word = $1",
+		input.PolishWord,
+	).Scan(&polishID)
+
+	if err == sql.ErrNoRows {
+		err = db.DB.QueryRowContext(
+			ctx,
+			"INSERT INTO polish_words (word) VALUES ($1) RETURNING id",
+			input.PolishWord,
+		).Scan(&polishID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to insert polish_word: %w", err)
+		}
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to find polish_word: %w", err)
+	}
+
+	var translationID int
+	err = db.DB.QueryRowContext(
+		ctx,
+		"INSERT INTO translations (polish_id, english_word) VALUES ($1, $2) RETURNING id",
+		polishID,
+		input.EnglishWord,
+	).Scan(&translationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert translation: %w", err)
+	}
+
+	for _, ex := range input.Examples {
+		_, err = db.DB.ExecContext(
+			ctx,
+			"INSERT INTO examples (translation_id, sentence) VALUES ($1, $2)",
+			translationID,
+			ex.Sentence,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to insert example: %w", err)
+		}
+	}
+
+	newTranslation := &model.Translation{
+		ID:          fmt.Sprintf("%d", translationID),
+		EnglishWord: input.EnglishWord,
+	}
+
+	return newTranslation, nil
 }
 
-// Todos is the resolver for the todos field.
-func (r *queryResolver) Todos(ctx context.Context) ([]*model.Todo, error) {
-	panic(fmt.Errorf("not implemented: Todos - todos"))
+// RemoveTranslation is the resolver for the removeTranslation field.
+func (r *mutationResolver) RemoveTranslation(ctx context.Context, id string) (bool, error) {
+	intID, err := strconv.Atoi(id)
+	if err != nil {
+		return false, fmt.Errorf("invalid ID: %v", err)
+	}
+
+	res, err := db.DB.ExecContext(ctx, "DELETE FROM translations WHERE id = $1", intID)
+	if err != nil {
+		return false, err
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	return rowsAffected > 0, nil
 }
 
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
-// Query returns QueryResolver implementation.
-func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
-
 type mutationResolver struct{ *Resolver }
-type queryResolver struct{ *Resolver }

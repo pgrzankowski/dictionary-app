@@ -1,28 +1,46 @@
-# GraphQL schema example
-#
-# https://gqlgen.com/getting-started/
+scalar Date
 
-type Todo {
+type PolishWord {
   id: ID!
-  text: String!
-  done: Boolean!
-  user: User!
+  word: String!
+  createdAt: Date!
+  updatedAt: Date!
+
+  translations: [Translation!]!
 }
 
-type User {
+type Translation {
   id: ID!
-  name: String!
+  englishWord: String!
+  createdAt: Date!
+  updatedAt: Date!
+
+  polishWord: PolishWord!
+
+  examples: [Example!]!
 }
 
-type Query {
-  todos: [Todo!]!
+type Example {
+  id: ID!
+  sentence: String!
+  createdAt: Date!
+  updatedAt: Date!
+
+  translation: Translation!
 }
 
-input NewTodo {
-  text: String!
-  userId: String!
+input NewExampleInput {
+  sentence: String!
 }
+
+input NewTranslationInput {
+  polishWord: String!
+  englishWord: String!
+  examples: [NewExampleInput!]
+}
+
 
 type Mutation {
-  createTodo(input: NewTodo!): Todo!
+  createTranslation(input: NewTranslationInput!): Translation!
+  removeTranslation(id: ID!): Boolean!
 }

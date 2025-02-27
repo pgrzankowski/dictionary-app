@@ -1,13 +1,17 @@
+version: "3.8"
+
 services:
   db:
     image: postgres:17.3-alpine
     container_name: dictionary-db-container
     ports:
       - "5431:5432"
+    env_file:
+      - .env
     environment:
-      POSTGRES_DB: dictionary-db
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
     volumes:
       - db-data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -22,12 +26,8 @@ services:
       - "8080:8080"
     depends_on:
       - db
-    environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_USER: admin
-      DB_PASS: pass
-      DB_NAME: dictionary-db
+    env_file:
+      - .env
     restart: unless-stopped
 
 volumes:

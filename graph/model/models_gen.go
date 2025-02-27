@@ -2,25 +2,43 @@
 
 package model
 
+type Example struct {
+	ID          string       `json:"id"`
+	Sentence    string       `json:"sentence"`
+	CreatedAt   string       `json:"createdAt"`
+	UpdatedAt   string       `json:"updatedAt"`
+	Translation *Translation `json:"translation"`
+}
+
 type Mutation struct {
 }
 
-type NewTodo struct {
-	Text   string `json:"text"`
-	UserID string `json:"userId"`
+type NewExampleInput struct {
+	Sentence string `json:"sentence"`
+}
+
+type NewTranslationInput struct {
+	PolishWord  string             `json:"polishWord"`
+	EnglishWord string             `json:"englishWord"`
+	Examples    []*NewExampleInput `json:"examples,omitempty"`
+}
+
+type PolishWord struct {
+	ID           string         `json:"id"`
+	Word         string         `json:"word"`
+	CreatedAt    string         `json:"createdAt"`
+	UpdatedAt    string         `json:"updatedAt"`
+	Translations []*Translation `json:"translations"`
 }
 
 type Query struct {
 }
 
-type Todo struct {
-	ID   string `json:"id"`
-	Text string `json:"text"`
-	Done bool   `json:"done"`
-	User *User  `json:"user"`
-}
-
-type User struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+type Translation struct {
+	ID          string      `json:"id"`
+	EnglishWord string      `json:"englishWord"`
+	CreatedAt   string      `json:"createdAt"`
+	UpdatedAt   string      `json:"updatedAt"`
+	PolishWord  *PolishWord `json:"polishWord"`
+	Examples    []*Example  `json:"examples"`
 }
