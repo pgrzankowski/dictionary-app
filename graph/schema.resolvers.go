@@ -149,7 +149,23 @@ func (r *queryResolver) Translations(ctx context.Context) ([]*model.Translation,
 
 // Translation is the resolver for the translation field.
 func (r *queryResolver) Translation(ctx context.Context, id string) (*model.Translation, error) {
-	panic(fmt.Errorf("not implemented: Translation - translation"))
+	intID, err := strconv.Atoi(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid id format")
+	}
+	var englishWord string
+	var createdAt, updatedAt time.Time
+	err = db.DB.QueryRowContext(ctx, "SELECT english_word, created_at, updated_at FROM translations WHERE id = $1", intID).
+		Scan(&englishWord, &createdAt, &updatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &model.Translation{
+		ID:          id,
+		EnglishWord: englishWord,
+		CreatedAt:   createdAt.String(),
+		UpdatedAt:   updatedAt.String(),
+	}, nil
 }
 
 // Mutation returns MutationResolver implementation.
