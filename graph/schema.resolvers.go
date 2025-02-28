@@ -6,66 +6,88 @@ package graph
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/pgrzankowski/dictionary-app/db"
 	"github.com/pgrzankowski/dictionary-app/graph/model"
+	"github.com/pgrzankowski/dictionary-app/models"
+	gormModels "github.com/pgrzankowski/dictionary-app/models"
 )
 
 // CreateTranslation is the resolver for the createTranslation field.
 func (r *mutationResolver) CreateTranslation(ctx context.Context, input model.NewTranslationInput) (*model.Translation, error) {
-	var polishID int
-	err := db.DB.QueryRowContext(
-		ctx,
-		"SELECT id FROM polish_words WHERE word = $1",
-		input.PolishWord,
-	).Scan(&polishID)
+	transaction := db.GormDB.Begin()
+	if transaction.Error != nil {
+		return nil, transaction.Error
+	}
 
-	if err == sql.ErrNoRows {
-		err = db.DB.QueryRowContext(
-			ctx,
-			"INSERT INTO polish_words (word) VALUES ($1) RETURNING id",
-			input.PolishWord,
-		).Scan(&polishID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to insert polish_word: %w", err)
+	var polishWord gormModels.PolishWord
+	if err := transaction.Where("word = ?", input.PolishWord).
+		FirstOrCreate(&polishWord, gormModels.PolishWord{Word: input.PolishWord}).
+		Error; err != nil {
+		transaction.Rollback()
+		return nil, fmt.Errorf("failed to get or create polish word: %w", err)
+	}
+
+	translation := gormModels.Translation{
+		EnglishWord:  input.EnglishWord,
+		PolishWordID: polishWord.ID,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	if err := transaction.Create(&translation).Error; err != nil {
+		transaction.Rollback()
+		return nil, fmt.Errorf("failed to create translation: %w", err)
+	}
+
+	for _, exInput := range input.Examples {
+		example := gormModels.Example{
+			Sentence:      exInput.Sentence,
+			TranslationID: translation.ID,
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
 		}
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to find polish_word: %w", err)
-	}
-
-	var translationID int
-	err = db.DB.QueryRowContext(
-		ctx,
-		"INSERT INTO translations (polish_id, english_word) VALUES ($1, $2) RETURNING id",
-		polishID,
-		input.EnglishWord,
-	).Scan(&translationID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to insert translation: %w", err)
-	}
-
-	for _, ex := range input.Examples {
-		_, err = db.DB.ExecContext(
-			ctx,
-			"INSERT INTO examples (translation_id, sentence) VALUES ($1, $2)",
-			translationID,
-			ex.Sentence,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to insert example: %w", err)
+		if err := transaction.Create(&example).Error; err != nil {
+			transaction.Rollback()
+			return nil, fmt.Errorf("failed to create example: %w", err)
 		}
+		translation.Examples = append(translation.Examples, example)
 	}
 
-	newTranslation := &model.Translation{
-		ID:          fmt.Sprintf("%d", translationID),
-		EnglishWord: input.EnglishWord,
+	if err := transaction.Commit().Error; err != nil {
+		return nil, err
 	}
 
-	return newTranslation, nil
+	transaction.Model(&translation).Association("PolishWord").Find(&translation.PolishWord)
+
+	return &model.Translation{
+		ID:          strconv.Itoa(int(translation.ID)),
+		EnglishWord: translation.EnglishWord,
+		CreatedAt:   translation.CreatedAt.String(),
+		UpdatedAt:   translation.UpdatedAt.String(),
+		PolishWord: &model.PolishWord{
+			ID:        strconv.Itoa(int(polishWord.ID)),
+			Word:      polishWord.Word,
+			CreatedAt: polishWord.CreatedAt.String(),
+			UpdatedAt: polishWord.UpdatedAt.String(),
+		},
+		Examples: convertExamples(translation.Examples),
+	}, nil
+}
+
+func convertExamples(examples []gormModels.Example) []*model.Example {
+	var result []*model.Example
+	for _, ex := range examples {
+		result = append(result, &model.Example{
+			ID:        strconv.Itoa(int(ex.ID)),
+			Sentence:  ex.Sentence,
+			CreatedAt: ex.CreatedAt.String(),
+			UpdatedAt: ex.UpdatedAt.String(),
+		})
+	}
+	return result
 }
 
 // RemoveTranslation is the resolver for the removeTranslation field.
@@ -123,49 +145,64 @@ func (r *mutationResolver) UpdateTranslation(ctx context.Context, input model.Up
 
 // Translations is the resolver for the translations field.
 func (r *queryResolver) Translations(ctx context.Context) ([]*model.Translation, error) {
-	rows, err := db.DB.QueryContext(ctx, "SELECT id, english_word, created_at, updated_at FROM translations")
-	if err != nil {
+	var translations []models.Translation
+	if err := db.GormDB.
+		Preload("PolishWord").
+		Preload("Examples").
+		Find(&translations).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var translations []*model.Translation
-	for rows.Next() {
-		var id int
-		var englishWord string
-		var createdAt, updatedAt time.Time
-		if err := rows.Scan(&id, &englishWord, &createdAt, &updatedAt); err != nil {
-			return nil, err
-		}
-		translations = append(translations, &model.Translation{
-			ID:          fmt.Sprintf("%d", id),
-			EnglishWord: englishWord,
-			CreatedAt:   createdAt.String(),
-			UpdatedAt:   updatedAt.String(),
+	var result []*model.Translation
+	for _, translation := range translations {
+		result = append(result, &model.Translation{
+			ID:          strconv.Itoa(int(translation.ID)),
+			EnglishWord: translation.EnglishWord,
+			CreatedAt:   translation.CreatedAt.String(),
+			UpdatedAt:   translation.UpdatedAt.String(),
+			PolishWord: &model.PolishWord{
+				ID:        strconv.Itoa(int(translation.PolishWord.ID)),
+				Word:      translation.PolishWord.Word,
+				CreatedAt: translation.PolishWord.CreatedAt.String(),
+				UpdatedAt: translation.PolishWord.UpdatedAt.String(),
+			},
+			Examples: convertExamples(translation.Examples),
 		})
 	}
-	return translations, nil
+
+	return result, nil
 }
 
 // Translation is the resolver for the translation field.
 func (r *queryResolver) Translation(ctx context.Context, id string) (*model.Translation, error) {
 	intID, err := strconv.Atoi(id)
 	if err != nil {
-		return nil, fmt.Errorf("invalid id format")
+		return nil, fmt.Errorf("invalid id format: %v", err)
 	}
-	var englishWord string
-	var createdAt, updatedAt time.Time
-	err = db.DB.QueryRowContext(ctx, "SELECT english_word, created_at, updated_at FROM translations WHERE id = $1", intID).
-		Scan(&englishWord, &createdAt, &updatedAt)
-	if err != nil {
+
+	var translation models.Translation
+	if err := db.GormDB.
+		Preload("PolishWord").
+		Preload("Examples").
+		First(&translation, intID).Error; err != nil {
 		return nil, err
 	}
-	return &model.Translation{
-		ID:          id,
-		EnglishWord: englishWord,
-		CreatedAt:   createdAt.String(),
-		UpdatedAt:   updatedAt.String(),
-	}, nil
+
+	result := &model.Translation{
+		ID:          strconv.Itoa(int(translation.ID)),
+		EnglishWord: translation.EnglishWord,
+		CreatedAt:   translation.CreatedAt.String(),
+		UpdatedAt:   translation.UpdatedAt.String(),
+		PolishWord: &model.PolishWord{
+			ID:        strconv.Itoa(int(translation.PolishWord.ID)),
+			Word:      translation.PolishWord.Word,
+			CreatedAt: translation.PolishWord.CreatedAt.String(),
+			UpdatedAt: translation.PolishWord.UpdatedAt.String(),
+		},
+		Examples: convertExamples(translation.Examples),
+	}
+
+	return result, nil
 }
 
 // Mutation returns MutationResolver implementation.
