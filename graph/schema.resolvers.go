@@ -94,20 +94,51 @@ func convertExamples(examples []gormModels.Example) []*model.Example {
 func (r *mutationResolver) RemoveTranslation(ctx context.Context, id string) (bool, error) {
 	intID, err := strconv.Atoi(id)
 	if err != nil {
-		return false, fmt.Errorf("invalid ID: %v", err)
+		return false, fmt.Errorf("invalid id format: %w", err)
 	}
 
-	res, err := db.DB.ExecContext(ctx, "DELETE FROM translations WHERE id = $1", intID)
-	if err != nil {
+	transaction := db.GormDB.Begin()
+	if transaction.Error != nil {
+		return false, transaction.Error
+	}
+
+	var translation models.Translation
+	if err := transaction.
+		Preload("PolishWord").
+		First(&translation, intID).
+		Error; err != nil {
+		transaction.Rollback()
 		return false, err
 	}
 
-	rowsAffected, err := res.RowsAffected()
-	if err != nil {
+	polishWordID := translation.PolishWordID
+
+	if err := transaction.Delete(&translation).Error; err != nil {
+		transaction.Rollback()
 		return false, err
 	}
 
-	return rowsAffected > 0, nil
+	var translationCount int64
+	if err := transaction.Model(&models.Translation{}).
+		Where("polish_word_id = ?", polishWordID).
+		Count(&translationCount).Error; err != nil {
+		transaction.Rollback()
+		return false, err
+	}
+
+	if translationCount == 0 {
+		if err := transaction.Delete(&models.PolishWord{}, polishWordID).
+			Error; err != nil {
+			transaction.Rollback()
+			return false, nil
+		}
+	}
+
+	if err := transaction.Commit().Error; err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 // UpdateTranslation is the resolver for the updateTranslation field.

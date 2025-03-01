@@ -23,7 +23,7 @@ type Translation struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	PolishWord   PolishWord
-	Examples     []Example `gorm:"foreignKey:TranslationID"`
+	Examples     []Example `gorm:"foreignKey:TranslationID;constraint:OnDelete:CASCADE;"`
 }
 
 func (Translation) TableName() string {
