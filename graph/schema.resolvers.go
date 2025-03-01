@@ -145,33 +145,52 @@ func (r *mutationResolver) RemoveTranslation(ctx context.Context, id string) (bo
 func (r *mutationResolver) UpdateTranslation(ctx context.Context, input model.UpdateTranslationInput) (*model.Translation, error) {
 	intID, err := strconv.Atoi(input.ID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid id: %v", err)
+		return nil, fmt.Errorf("invalid id format: %v", err)
 	}
 
-	if input.EnglishWord != nil {
-		_, err := db.DB.ExecContext(ctx,
-			"UPDATE translations SET english_word = $1, updated_at = NOW() WHERE id = $2",
-			*input.EnglishWord, intID)
-		if err != nil {
-			return nil, err
-		}
+	transaction := db.GormDB.Begin()
+	if transaction.Error != nil {
+		return nil, transaction.Error
 	}
 
-	var englishWord string
-	var createdAt, updatedAt time.Time
-	err = db.DB.QueryRowContext(ctx,
-		"SELECT english_word, created_at, updated_at FROM translations WHERE id = $1", intID).
-		Scan(&englishWord, &createdAt, &updatedAt)
-	if err != nil {
+	var translation models.Translation
+	if err := transaction.
+		Preload("PolishWord").
+		Preload("Examples").
+		First(&translation, intID).
+		Error; err != nil {
+		transaction.Rollback()
 		return nil, err
 	}
 
-	return &model.Translation{
-		ID:          input.ID,
-		EnglishWord: englishWord,
-		CreatedAt:   createdAt.String(),
-		UpdatedAt:   updatedAt.String(),
-	}, nil
+	translation.EnglishWord = *input.EnglishWord
+	translation.UpdatedAt = time.Now()
+
+	if err := transaction.Save(&translation).Error; err != nil {
+		transaction.Rollback()
+		return nil, err
+	}
+
+	if err := transaction.Commit().Error; err != nil {
+		return nil, err
+	}
+
+	updatedTranslation := &model.Translation{
+		ID:          strconv.Itoa(int(translation.ID)),
+		EnglishWord: translation.EnglishWord,
+		CreatedAt:   translation.EnglishWord,
+		UpdatedAt:   translation.UpdatedAt.String(),
+		PolishWord: &model.PolishWord{
+			ID:        strconv.Itoa(int(translation.PolishWord.ID)),
+			Word:      translation.PolishWord.Word,
+			CreatedAt: translation.PolishWord.CreatedAt.String(),
+			UpdatedAt: translation.PolishWord.UpdatedAt.String(),
+		},
+		Examples: convertExamples(translation.Examples),
+	}
+
+	return updatedTranslation, nil
+
 }
 
 // Translations is the resolver for the translations field.
