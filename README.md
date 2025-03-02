@@ -77,3 +77,119 @@ This will run all tests since only services are tested.
 
 - **Testing:**  
   Unit tests use Go's built-in testing package along with [sqlmock](https://github.com/DATA-DOG/go-sqlmock) for mocking database interactions.
+
+## Query examples
+
+- **Create translation**
+   ```
+   mutation {
+      createTranslation(
+         input: {
+            polishWord: "pić"
+            englishWord: "drink"
+            examples: [{ sentence: "Lubi pić wode." }]
+         }
+      ) {
+         id
+         englishWord
+         polishWord {
+            id
+            word
+            createdAt
+            updatedAt
+         }
+         examples {
+            id
+            sentence
+            createdAt
+            updatedAt
+         }
+         createdAt
+         updatedAt
+      }
+   }
+   ```
+
+- **Remove translation**
+   ```
+   mutation {
+      removeTranslation(id: "1")
+   }
+   ```
+
+- **Update translation**
+   ```
+   mutation {
+      updateTranslation(
+         input: {
+            id: "3"
+            englishWord: "chug"
+         }
+      ) {
+         id
+         englishWord
+         polishWord {
+            id
+            word
+            createdAt
+            updatedAt
+         }
+         examples {
+            id
+            sentence
+            createdAt
+            updatedAt
+         }
+         createdAt
+         updatedAt
+      }
+   }
+   ```
+
+- **Get all translations**
+   ```
+   query {
+      translations {
+         id
+         englishWord
+         polishWord {
+            id
+            word
+            createdAt
+            updatedAt
+         }
+         examples {
+            id
+            sentence
+            createdAt
+            updatedAt
+         }
+         createdAt
+         updatedAt
+      }
+   }
+   ```
+
+- **Get translation by id**
+   ```
+   query {
+      translation(id: "3") {
+         id
+         englishWord
+         polishWord {
+            id
+            word
+            createdAt
+            updatedAt
+         }
+         examples {
+            id
+            sentence
+            createdAt
+            updatedAt
+         }
+         createdAt
+         updatedAt
+      }
+   }
+   ```
