@@ -9,14 +9,16 @@ A GraphQL API built with Go, gqlgen, and GORM for managing translations of Polis
 
 ## Setup & Running Locally
 
-1. **Clone the Repository**
+1. **Install Go (go1.23.6)**
+
+2. **Clone the Repository**
 
    ```sh
    git clone https://github.com/pgrzankowski/dictionary-app.git
    cd dictionary-app
    ```
 
-2. **Create a `.env` File**
+3. **Create a `.env` File**
 
    In the root directory, create a file named `.env` with your database and application configuration. For example:
 
@@ -28,7 +30,7 @@ A GraphQL API built with Go, gqlgen, and GORM for managing translations of Polis
     DB_PORT=5432
    ```
 
-3. **Run the Application**
+4. **Run the Application**
 
    Use Docker Compose to build and start the containers:
 
@@ -41,32 +43,32 @@ A GraphQL API built with Go, gqlgen, and GORM for managing translations of Polis
    - Start the PostgreSQL container.
    - Run the API server.
 
-4. **Access the GraphQL Playground**
+5. **Access the GraphQL Playground**
 
    Open your browser and navigate to [http://localhost:8080](http://localhost:8080) to access the GraphQL Playground and interact with the API.
 
 ## Running Tests
 
-To run unit tests, ensure you have Go installed and then execute:
+To run unit tests execute:
 
 ```sh
-go test ./...
+go test ./services
 ```
 
-This will run all tests across your project.
+This will run all tests since only services are tested.
 
 ## Project Structure
 
 - **db/**: Contains database connection logic.
 - **graph/**: Contains the GraphQL schema and resolvers.
-- **services/**: Contains business logic for managing translations.
-- **models/**: Contains GORM models for your database tables.
-- **.env**: Environment configuration file (do not commit sensitive information).
+- **services/**: Contains logic for managing translations.
+- **models/**: Contains GORM models for the database tables.
+- **.env**: Environment configuration file.
 
 ## Additional Information
 
 - **Technology Stack:**
-  - **Backend:** Go, gqlgen, GORM
+  - **Backend:** Go (go1.23.6), gqlgen, GORM
   - **Database:** PostgreSQL
   - **Containerization:** Docker & Docker Compose
 
