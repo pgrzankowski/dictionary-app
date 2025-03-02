@@ -6,13 +6,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/pgrzankowski/dictionary-app/db"
 	"github.com/pgrzankowski/dictionary-app/graph/model"
 	gormModels "github.com/pgrzankowski/dictionary-app/models"
+	"gorm.io/gorm"
 )
 
-func CreateTranslation(ctx context.Context, input model.NewTranslationInput) (*model.Translation, error) {
-	transaction := db.GormDB.Begin()
+func CreateTranslation(db *gorm.DB, ctx context.Context, input model.NewTranslationInput) (*model.Translation, error) {
+	transaction := db.Begin()
 	if transaction.Error != nil {
 		return nil, transaction.Error
 	}
@@ -71,13 +71,13 @@ func CreateTranslation(ctx context.Context, input model.NewTranslationInput) (*m
 	}, nil
 }
 
-func RemoveTranslation(ctx context.Context, id string) (bool, error) {
+func RemoveTranslation(db *gorm.DB, ctx context.Context, id string) (bool, error) {
 	intID, err := strconv.Atoi(id)
 	if err != nil {
 		return false, fmt.Errorf("invalid id format: %w", err)
 	}
 
-	transaction := db.GormDB.Begin()
+	transaction := db.Begin()
 	if transaction.Error != nil {
 		return false, transaction.Error
 	}
@@ -121,13 +121,13 @@ func RemoveTranslation(ctx context.Context, id string) (bool, error) {
 	return true, nil
 }
 
-func UpdateTranslation(ctx context.Context, input model.UpdateTranslationInput) (*model.Translation, error) {
+func UpdateTranslation(db *gorm.DB, ctx context.Context, input model.UpdateTranslationInput) (*model.Translation, error) {
 	intID, err := strconv.Atoi(input.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid id format: %v", err)
 	}
 
-	transaction := db.GormDB.Begin()
+	transaction := db.Begin()
 	if transaction.Error != nil {
 		return nil, transaction.Error
 	}
@@ -171,9 +171,9 @@ func UpdateTranslation(ctx context.Context, input model.UpdateTranslationInput) 
 	return updatedTranslation, nil
 }
 
-func Translations(ctx context.Context) ([]*model.Translation, error) {
+func Translations(db *gorm.DB, ctx context.Context) ([]*model.Translation, error) {
 	var translations []gormModels.Translation
-	if err := db.GormDB.
+	if err := db.
 		Preload("PolishWord").
 		Preload("Examples").
 		Find(&translations).Error; err != nil {
@@ -200,14 +200,14 @@ func Translations(ctx context.Context) ([]*model.Translation, error) {
 	return result, nil
 }
 
-func Translation(ctx context.Context, id string) (*model.Translation, error) {
+func Translation(db *gorm.DB, ctx context.Context, id string) (*model.Translation, error) {
 	intID, err := strconv.Atoi(id)
 	if err != nil {
 		return nil, fmt.Errorf("invalid id format: %v", err)
 	}
 
 	var translation gormModels.Translation
-	if err := db.GormDB.
+	if err := db.
 		Preload("PolishWord").
 		Preload("Examples").
 		First(&translation, intID).Error; err != nil {

@@ -7,13 +7,14 @@ package graph
 import (
 	"context"
 
+	"github.com/pgrzankowski/dictionary-app/db"
 	"github.com/pgrzankowski/dictionary-app/graph/model"
 	"github.com/pgrzankowski/dictionary-app/services"
 )
 
 // CreateTranslation is the resolver for the createTranslation field.
 func (r *mutationResolver) CreateTranslation(ctx context.Context, input model.NewTranslationInput) (*model.Translation, error) {
-	translation, err := services.CreateTranslation(ctx, input)
+	translation, err := services.CreateTranslation(db.GormDB, ctx, input)
 	if err != nil {
 		return nil, err
 	}
@@ -23,7 +24,7 @@ func (r *mutationResolver) CreateTranslation(ctx context.Context, input model.Ne
 
 // RemoveTranslation is the resolver for the removeTranslation field.
 func (r *mutationResolver) RemoveTranslation(ctx context.Context, id string) (bool, error) {
-	removed, err := services.RemoveTranslation(ctx, id)
+	removed, err := services.RemoveTranslation(db.GormDB, ctx, id)
 	if err != nil {
 		return false, err
 	}
@@ -33,7 +34,7 @@ func (r *mutationResolver) RemoveTranslation(ctx context.Context, id string) (bo
 
 // UpdateTranslation is the resolver for the updateTranslation field.
 func (r *mutationResolver) UpdateTranslation(ctx context.Context, input model.UpdateTranslationInput) (*model.Translation, error) {
-	updatedTranslation, err := services.UpdateTranslation(ctx, input)
+	updatedTranslation, err := services.UpdateTranslation(db.GormDB, ctx, input)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +44,7 @@ func (r *mutationResolver) UpdateTranslation(ctx context.Context, input model.Up
 
 // Translations is the resolver for the translations field.
 func (r *queryResolver) Translations(ctx context.Context) ([]*model.Translation, error) {
-	result, err := services.Translations(ctx)
+	result, err := services.Translations(db.GormDB, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +54,7 @@ func (r *queryResolver) Translations(ctx context.Context) ([]*model.Translation,
 
 // Translation is the resolver for the translation field.
 func (r *queryResolver) Translation(ctx context.Context, id string) (*model.Translation, error) {
-	result, err := services.Translation(ctx, id)
+	result, err := services.Translation(db.GormDB, ctx, id)
 	if err != nil {
 		return nil, err
 	}
