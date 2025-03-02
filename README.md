@@ -5,7 +5,7 @@ A GraphQL API built with Go, gqlgen, and GORM for managing translations of Polis
 ## Prerequisites
 
 - [Docker](https://www.docker.com/) & [Docker Compose](https://docs.docker.com/compose/)
-- [Go](https://golang.org/)
+- [Go](https://golang.org/) (go version go1.23.6)
 
 ## Setup & Running Locally
 
