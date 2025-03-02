@@ -10,6 +10,7 @@ import (
 	"github.com/pgrzankowski/dictionary-app/db"
 	"github.com/pgrzankowski/dictionary-app/graph/model"
 	"github.com/pgrzankowski/dictionary-app/services"
+	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -30,6 +31,7 @@ func setupMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 	return gormDB, mock
 }
 
+// Test mutations
 func TestCreateTranslation(t *testing.T) {
 	gormDB, mock := setupMockDB(t)
 	db.GormDB = gormDB
@@ -172,5 +174,91 @@ func TestUpdateTranslation(t *testing.T) {
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("there were unfulfilled expectations: %v", err)
+	}
+}
+
+// Test queries
+func TestTranslations(t *testing.T) {
+	gormDB, mock := setupMockDB(t)
+	db.GormDB = gormDB
+
+	now := time.Now()
+
+	rowsTrans := sqlmock.NewRows([]string{"id", "polish_word_id", "english_word", "created_at", "updated_at"}).
+		AddRow(1, 1, "write", now, now)
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "translations"`)).
+		WillReturnRows(rowsTrans)
+
+	rowsExamples := sqlmock.NewRows([]string{"id", "translation_id", "sentence", "created_at", "updated_at"})
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "examples" WHERE "examples"."translation_id" = $1`)).
+		WithArgs(1).
+		WillReturnRows(rowsExamples)
+
+	rowsPolish := sqlmock.NewRows([]string{"id", "word", "created_at", "updated_at"}).
+		AddRow(1, "pisać", now, now)
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "polish_words" WHERE "polish_words"."id" = $1`)).
+		WithArgs(1).
+		WillReturnRows(rowsPolish)
+
+	ctx := context.Background()
+	result, err := services.Translations(ctx)
+	if err != nil {
+		t.Fatalf("Translations query failed: %v", err)
+	}
+
+	assert.Len(t, result, 1, "expected 1 translation")
+
+	translation := result[0]
+	assert.Equal(t, "1", translation.ID, "expected translation ID to be '1'")
+	assert.Equal(t, "write", translation.EnglishWord, "expected english word to be 'write'")
+	if translation.PolishWord == nil {
+		t.Error("expected a non-nil PolishWord")
+	} else {
+		assert.Equal(t, "pisać", translation.PolishWord.Word, "expected polish word to be 'pisać'")
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %v", err)
+	}
+}
+
+func TestTranslationByID(t *testing.T) {
+	gormDB, mock := setupMockDB(t)
+	db.GormDB = gormDB
+
+	now := time.Now()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "translations" WHERE "translations"."id" = $1 ORDER BY "translations"."id" LIMIT $2`)).
+		WithArgs(1, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "polish_word_id", "english_word", "created_at", "updated_at"}).
+			AddRow(1, 1, "write", now, now))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "examples" WHERE "examples"."translation_id" = $1`)).
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "translation_id", "sentence", "created_at", "updated_at"}))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "polish_words" WHERE "polish_words"."id" = $1`)).
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "word", "created_at", "updated_at"}).
+			AddRow(1, "pisać", now, now))
+
+	ctx := context.Background()
+	result, err := services.Translation(ctx, "1")
+	if err != nil {
+		t.Fatalf("Translation query failed: %v", err)
+	}
+
+	assert.NotNil(t, result, "expected translation")
+	assert.Equal(t, "1", result.ID, "expected translation ID to be '1'")
+	assert.Equal(t, "write", result.EnglishWord, "expected english word to be 'write'")
+	if result.PolishWord == nil {
+		t.Error("expected PolishWord")
+	} else {
+		assert.Equal(t, "pisać", result.PolishWord.Word, "expected polish word to be 'pisać'")
+	}
+	assert.Len(t, result.Examples, 0, "expected 0 examples")
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
