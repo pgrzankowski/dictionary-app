@@ -18,8 +18,8 @@ func (PolishWord) TableName() string {
 
 type Translation struct {
 	ID           uint   `gorm:"primaryKey"`
-	PolishWordID uint   `gorm:"not null"`
-	EnglishWord  string `gorm:"not null"`
+	PolishWordID uint   `gorm:"not null;uniqueIndex:idx_polish_english"`
+	EnglishWord  string `gorm:"not null;uniqueIndex:idx_polish_english"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	PolishWord   PolishWord

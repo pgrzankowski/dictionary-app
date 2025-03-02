@@ -25,6 +25,17 @@ func CreateTranslation(db *gorm.DB, ctx context.Context, input model.NewTranslat
 		return nil, fmt.Errorf("failed to get or create polish word: %w", err)
 	}
 
+	var existingTranslation gormModels.Translation
+	if err := transaction.
+		Where("polish_word_id = ? AND english_word = ?", polishWord.ID, input.EnglishWord).
+		First(&existingTranslation).Error; err == nil {
+		transaction.Rollback()
+		return nil, fmt.Errorf("translation for polish word '%s' with english word '%s' already exists", input.PolishWord, input.EnglishWord)
+	} else if err != nil && err != gorm.ErrRecordNotFound {
+		transaction.Rollback()
+		return nil, fmt.Errorf("error checking for existing translation: %w", err)
+	}
+
 	translation := gormModels.Translation{
 		EnglishWord:  input.EnglishWord,
 		PolishWordID: polishWord.ID,

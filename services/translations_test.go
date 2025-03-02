@@ -51,6 +51,10 @@ func TestCreateTranslation(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "word", "created_at", "updated_at"}).
 			AddRow(1, input.PolishWord, time.Now(), time.Now()))
 
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "translations" WHERE polish_word_id = $1 AND english_word = $2 ORDER BY "translations"."id" LIMIT $3`)).
+		WithArgs(1, input.EnglishWord, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "polish_word_id", "english_word", "created_at", "updated_at"}))
+
 	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "translations" ("polish_word_id","english_word","created_at","updated_at") VALUES ($1,$2,$3,$4) RETURNING "id"`)).
 		WithArgs(1, input.EnglishWord, sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
@@ -284,6 +288,10 @@ func TestConcurrentCreateTranslation(t *testing.T) {
 			mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "polish_words" ("word","created_at","updated_at") VALUES ($1,$2,$3) RETURNING "id"`)).
 				WithArgs(input.PolishWord, sqlmock.AnyArg(), sqlmock.AnyArg()).
 				WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+			mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "translations" WHERE polish_word_id = $1 AND english_word = $2 ORDER BY "translations"."id" LIMIT $3`)).
+				WithArgs(1, input.EnglishWord, 1).
+				WillReturnRows(sqlmock.NewRows([]string{"id", "polish_word_id", "english_word", "created_at", "updated_at"}))
 
 			mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "translations" ("polish_word_id","english_word","created_at","updated_at") VALUES ($1,$2,$3,$4) RETURNING "id"`)).
 				WithArgs(1, input.EnglishWord, sqlmock.AnyArg(), sqlmock.AnyArg()).
