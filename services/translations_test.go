@@ -1,4 +1,3 @@
-// services/translation_test.go
 package services_test
 
 import (
@@ -15,7 +14,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// setupMockDB creates a new sqlmock connection and returns a GORM DB instance along with the mock.
 func setupMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 	dbConn, mock, err := sqlmock.New()
 	if err != nil {
@@ -69,6 +67,109 @@ func TestCreateTranslation(t *testing.T) {
 	if translation.ID != "1" || translation.EnglishWord != input.EnglishWord {
 		t.Errorf("unexpected translation returned: %+v", translation)
 	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %v", err)
+	}
+}
+
+func TestRemoveTranslation(t *testing.T) {
+	gormDB, mock := setupMockDB(t)
+	db.GormDB = gormDB
+
+	translationID := 1
+	polishWordID := 1
+
+	mock.ExpectBegin()
+
+	mock.ExpectQuery(`(?i)^SELECT \* FROM "translations" WHERE "translations"."id" = \$1 ORDER BY "translations"."id" LIMIT \$2`).
+		WithArgs(translationID, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "polish_word_id", "english_word", "created_at", "updated_at"}).
+			AddRow(translationID, polishWordID, "write", time.Now(), time.Now()))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "polish_words" WHERE "polish_words"."id" = $1`)).
+		WithArgs(polishWordID).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "word", "created_at", "updated_at"}).
+			AddRow(polishWordID, "pisać", time.Now(), time.Now()))
+
+	mock.ExpectExec(regexp.QuoteMeta(
+		`DELETE FROM "translations" WHERE "translations"."id" = $1`)).
+		WithArgs(translationID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectQuery(regexp.QuoteMeta(
+		`SELECT count(*) FROM "translations" WHERE polish_word_id = $1`)).
+		WithArgs(polishWordID).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+	mock.ExpectExec(regexp.QuoteMeta(
+		`DELETE FROM "polish_words" WHERE "polish_words"."id" = $1`)).
+		WithArgs(polishWordID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectCommit()
+
+	result, err := services.RemoveTranslation(context.Background(), "1")
+	if err != nil {
+		t.Fatalf("RemoveTranslation failed: %v", err)
+	}
+	if !result {
+		t.Error("expected removal to succeed, got false")
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestUpdateTranslation(t *testing.T) {
+	gormDB, mock := setupMockDB(t)
+	db.GormDB = gormDB
+
+	newEng := "modify"
+	input := model.UpdateTranslationInput{
+		ID:          "1",
+		EnglishWord: &newEng,
+	}
+
+	mock.ExpectBegin()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "translations" WHERE "translations"."id" = $1 ORDER BY "translations"."id" LIMIT $2`)).
+		WithArgs(1, 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "polish_word_id", "english_word", "created_at", "updated_at",
+		}).AddRow(1, 1, "write", time.Now(), time.Now()))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "examples" WHERE "examples"."translation_id" = $1`)).
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "translation_id", "sentence", "created_at", "updated_at",
+		}))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "polish_words" WHERE "polish_words"."id" = $1`)).
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "word", "created_at", "updated_at"}).
+			AddRow(1, "pisać", time.Now(), time.Now()))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "polish_words" ("word","created_at","updated_at","id") VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING "id"`)).
+		WithArgs("pisać", sqlmock.AnyArg(), sqlmock.AnyArg(), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "translations" SET "polish_word_id"=$1,"english_word"=$2,"created_at"=$3,"updated_at"=$4 WHERE "id" = $5`)).
+		WithArgs(1, "modify", sqlmock.AnyArg(), sqlmock.AnyArg(), 1).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	mock.ExpectCommit()
+
+	ctx := context.Background()
+	updated, err := services.UpdateTranslation(ctx, input)
+	if err != nil {
+		t.Fatalf("UpdateTranslation failed: %v", err)
+	}
+
+	if updated.EnglishWord != "modify" {
+		t.Errorf("expected english word to be 'modify', got %s", updated.EnglishWord)
+	}
+
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("there were unfulfilled expectations: %v", err)
 	}
