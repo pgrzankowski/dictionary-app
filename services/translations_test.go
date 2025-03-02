@@ -181,21 +181,18 @@ func TestTranslations(t *testing.T) {
 
 	now := time.Now()
 
-	rowsTrans := sqlmock.NewRows([]string{"id", "polish_word_id", "english_word", "created_at", "updated_at"}).
-		AddRow(1, 1, "write", now, now)
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "translations"`)).
-		WillReturnRows(rowsTrans)
+		WillReturnRows(sqlmock.NewRows([]string{"id", "polish_word_id", "english_word", "created_at", "updated_at"}).
+			AddRow(1, 1, "write", now, now))
 
-	rowsExamples := sqlmock.NewRows([]string{"id", "translation_id", "sentence", "created_at", "updated_at"})
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "examples" WHERE "examples"."translation_id" = $1`)).
 		WithArgs(1).
-		WillReturnRows(rowsExamples)
+		WillReturnRows(sqlmock.NewRows([]string{"id", "translation_id", "sentence", "created_at", "updated_at"}))
 
-	rowsPolish := sqlmock.NewRows([]string{"id", "word", "created_at", "updated_at"}).
-		AddRow(1, "pisać", now, now)
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "polish_words" WHERE "polish_words"."id" = $1`)).
 		WithArgs(1).
-		WillReturnRows(rowsPolish)
+		WillReturnRows(sqlmock.NewRows([]string{"id", "word", "created_at", "updated_at"}).
+			AddRow(1, "pisać", now, now))
 
 	ctx := context.Background()
 	result, err := services.Translations(gormDB, ctx)
@@ -279,18 +276,23 @@ func TestConcurrentCreateTranslation(t *testing.T) {
 			}
 
 			mock.ExpectBegin()
+
 			mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "polish_words" WHERE word = $1 AND "polish_words"."word" = $2 ORDER BY "polish_words"."id" LIMIT $3`)).
 				WithArgs(input.PolishWord, input.PolishWord, 1).
 				WillReturnRows(sqlmock.NewRows([]string{"id", "word", "created_at", "updated_at"}))
+
 			mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "polish_words" ("word","created_at","updated_at") VALUES ($1,$2,$3) RETURNING "id"`)).
 				WithArgs(input.PolishWord, sqlmock.AnyArg(), sqlmock.AnyArg()).
 				WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
 			mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "translations" ("polish_word_id","english_word","created_at","updated_at") VALUES ($1,$2,$3,$4) RETURNING "id"`)).
 				WithArgs(1, input.EnglishWord, sqlmock.AnyArg(), sqlmock.AnyArg()).
 				WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
 			mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "examples" ("translation_id","sentence","created_at","updated_at") VALUES ($1,$2,$3,$4) RETURNING "id"`)).
 				WithArgs(1, input.Examples[0].Sentence, sqlmock.AnyArg(), sqlmock.AnyArg()).
 				WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
 			mock.ExpectCommit()
 
 			ctx := context.Background()
@@ -326,24 +328,30 @@ func TestConcurrentUpdateTranslation(t *testing.T) {
 			}
 
 			mock.ExpectBegin()
+
 			mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "translations" WHERE "translations"."id" = $1 ORDER BY "translations"."id" LIMIT $2`)).
 				WithArgs(1, 1).
 				WillReturnRows(sqlmock.NewRows([]string{
 					"id", "polish_word_id", "english_word", "created_at", "updated_at",
 				}).AddRow(1, 1, "write", time.Now(), time.Now()))
+
 			mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "examples" WHERE "examples"."translation_id" = $1`)).
 				WithArgs(1).
 				WillReturnRows(sqlmock.NewRows([]string{"id", "translation_id", "sentence", "created_at", "updated_at"}))
+
 			mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "polish_words" WHERE "polish_words"."id" = $1`)).
 				WithArgs(1).
 				WillReturnRows(sqlmock.NewRows([]string{"id", "word", "created_at", "updated_at"}).
 					AddRow(1, "pisać", time.Now(), time.Now()))
+
 			mock.ExpectQuery(regexp.QuoteMeta(`INSERT INTO "polish_words" ("word","created_at","updated_at","id") VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING "id"`)).
 				WithArgs("pisać", sqlmock.AnyArg(), sqlmock.AnyArg(), 1).
 				WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
 			mock.ExpectExec(regexp.QuoteMeta(`UPDATE "translations" SET "polish_word_id"=$1,"english_word"=$2,"created_at"=$3,"updated_at"=$4 WHERE "id" = $5`)).
 				WithArgs(1, "modify", sqlmock.AnyArg(), sqlmock.AnyArg(), 1).
 				WillReturnResult(sqlmock.NewResult(1, 1))
+
 			mock.ExpectCommit()
 
 			ctx := context.Background()
@@ -376,28 +384,29 @@ func TestConcurrentRemoveTranslation(t *testing.T) {
 			polishWordID := 1
 
 			mock.ExpectBegin()
-			// Expect SELECT for fetching the translation.
+
 			mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "translations" WHERE "translations"."id" = $1 ORDER BY "translations"."id" LIMIT $2`)).
 				WithArgs(translationID, 1).
 				WillReturnRows(sqlmock.NewRows([]string{"id", "polish_word_id", "english_word", "created_at", "updated_at"}).
 					AddRow(translationID, polishWordID, "write", time.Now(), time.Now()))
-			// Expect SELECT for preloading the PolishWord.
+
 			mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "polish_words" WHERE "polish_words"."id" = $1`)).
 				WithArgs(polishWordID).
 				WillReturnRows(sqlmock.NewRows([]string{"id", "word", "created_at", "updated_at"}).
 					AddRow(polishWordID, "pisać", time.Now(), time.Now()))
-			// Expect DELETE on translations.
+
 			mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM "translations" WHERE "translations"."id" = $1`)).
 				WithArgs(translationID).
 				WillReturnResult(sqlmock.NewResult(0, 1))
-			// Expect COUNT query for remaining translations of this PolishWord.
+
 			mock.ExpectQuery(regexp.QuoteMeta(`SELECT count(*) FROM "translations" WHERE polish_word_id = $1`)).
 				WithArgs(polishWordID).
 				WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
-			// Expect DELETE on polish_words because count is 0.
+
 			mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM "polish_words" WHERE "polish_words"."id" = $1`)).
 				WithArgs(polishWordID).
 				WillReturnResult(sqlmock.NewResult(0, 1))
+
 			mock.ExpectCommit()
 
 			ctx := context.Background()
@@ -414,4 +423,45 @@ func TestConcurrentRemoveTranslation(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+// Edge cases
+func TestRemoveTranslation_PolishWordNotRemoved(t *testing.T) {
+	gormDB, mock := setupMockDB(t)
+
+	translationID := 1
+	polishWordID := 1
+
+	mock.ExpectBegin()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "translations" WHERE "translations"."id" = $1 ORDER BY "translations"."id" LIMIT $2`)).
+		WithArgs(translationID, 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "polish_word_id", "english_word", "created_at", "updated_at"}).
+			AddRow(translationID, polishWordID, "write", time.Now(), time.Now()))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT * FROM "polish_words" WHERE "polish_words"."id" = $1`)).
+		WithArgs(polishWordID).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "word", "created_at", "updated_at"}).
+			AddRow(polishWordID, "pisać", time.Now(), time.Now()))
+
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM "translations" WHERE "translations"."id" = $1`)).
+		WithArgs(translationID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT count(*) FROM "translations" WHERE polish_word_id = $1`)).
+		WithArgs(polishWordID).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+
+	mock.ExpectCommit()
+
+	ctx := context.Background()
+	result, err := services.RemoveTranslation(gormDB, ctx, strconv.Itoa(translationID))
+	if err != nil {
+		t.Fatalf("RemoveTranslation failed: %v", err)
+	}
+	assert.True(t, result, "expected removal to succeed and return true")
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %v", err)
+	}
 }
