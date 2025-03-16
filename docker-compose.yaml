@@ -16,6 +16,22 @@ services:
       - db-data:/var/lib/postgresql/data
     restart: unless-stopped
 
+  db-test:
+    image: postgres:17.3-alpine
+    container_name: dictionary-test-db-container
+    ports:
+      - "5430:5432"
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${DB_TEST_NAME}
+      POSTGRES_USER: ${DB_TEST_USER}
+      POSTGRES_PASSWORD: ${DB_TEST_PASS}
+    # volume:
+    #   - db-test-data:/var/lib/postgresql/data
+    restart: unless-stopped
+      
+
   app:
     build:
       context: .
@@ -25,6 +41,7 @@ services:
       - "8080:8080"
     depends_on:
       - db
+      - db-test
     env_file:
       - .env
     restart: unless-stopped
