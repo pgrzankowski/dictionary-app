@@ -18,11 +18,22 @@ func CreateTranslation(db *gorm.DB, ctx context.Context, input model.NewTranslat
 	}
 
 	var polishWord gormModels.PolishWord
-	if err := transaction.Where("word = ?", input.PolishWord).
-		FirstOrCreate(&polishWord, gormModels.PolishWord{Word: input.PolishWord}).
-		Error; err != nil {
-		transaction.Rollback()
-		return nil, fmt.Errorf("failed to get or create polish word: %w", err)
+	err := transaction.Where("word = ?", input.PolishWord).First(&polishWord).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			if err := transaction.Create(&gormModels.PolishWord{Word: input.PolishWord}).Error; err != nil {
+				transaction.Rollback()
+				return nil, fmt.Errorf("failed to create polish word: %w", err)
+			}
+
+			if err := transaction.Where("word = ?", input.PolishWord).First(&polishWord).Error; err != nil {
+				transaction.Rollback()
+				return nil, fmt.Errorf("failed to fetch polish word: %w", err)
+			}
+		} else {
+			transaction.Rollback()
+			return nil, fmt.Errorf("error checking for polish word: %w", err)
+		}
 	}
 
 	var existingTranslation gormModels.Translation
@@ -31,7 +42,7 @@ func CreateTranslation(db *gorm.DB, ctx context.Context, input model.NewTranslat
 		First(&existingTranslation).Error; err == nil {
 		transaction.Rollback()
 		return nil, fmt.Errorf("translation for polish word '%s' with english word '%s' already exists", input.PolishWord, input.EnglishWord)
-	} else if err != nil && err != gorm.ErrRecordNotFound {
+	} else if err != gorm.ErrRecordNotFound {
 		transaction.Rollback()
 		return nil, fmt.Errorf("error checking for existing translation: %w", err)
 	}

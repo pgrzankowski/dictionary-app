@@ -2,8 +2,11 @@ package services_test
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/pgrzankowski/dictionary-app/db"
@@ -187,3 +190,163 @@ func TestTranslation(t *testing.T) {
 }
 
 // Test concurency
+
+// Race condition occurs in this test since running it multiple times results in either result1 or
+// result2 being nil (meaning that once result1 is nil and once result2 is nil)
+
+// I could create a test running the following in a loop, checking if outcomes are different each time
+// but since it is theoreticaly possible for the same result to be nil, I decided that this test is enough
+func TestConcurrentCreateTranslation(t *testing.T) {
+
+	db.ConnectTestGORM()
+	clearTestDB(t)
+
+	input := model.NewTranslationInput{
+		PolishWord:  "pisać",
+		EnglishWord: "write",
+		Examples: []*model.NewExampleInput{
+			{Sentence: "On lubi pisać listy."},
+		},
+	}
+
+	ctx := context.Background()
+
+	var mu sync.Mutex
+	cond := sync.NewCond(&mu)
+	start := false
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	var result1, result2 *model.Translation
+	var err1, err2 error
+
+	go func() {
+		defer wg.Done()
+		mu.Lock()
+		for !start {
+			cond.Wait()
+		}
+		mu.Unlock()
+		result1, err1 = services.CreateTranslation(db.GormTestDB, ctx, input)
+	}()
+
+	go func() {
+		defer wg.Done()
+		mu.Lock()
+		for !start {
+			cond.Wait()
+		}
+		mu.Unlock()
+		result2, err2 = services.CreateTranslation(db.GormTestDB, ctx, input)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	mu.Lock()
+	start = true
+	cond.Broadcast()
+	mu.Unlock()
+
+	wg.Wait()
+
+	if err1 == nil && err2 == nil {
+		t.Fatalf("expected one creation to fail due to duplicate, but both succeeded")
+	}
+	if err1 != nil && err2 != nil {
+		t.Fatalf("expected one creation to fail due to duplicate, but both failed")
+	}
+
+	var success *model.Translation
+	var duplicateErr error
+	if err1 == nil {
+		success = result1
+		duplicateErr = err2
+	} else {
+		success = result2
+		duplicateErr = err1
+	}
+
+	assert.NotNil(t, success, "one translation creation should succeed: result1=%+v, result2=%+v", result1, result2)
+	assert.Contains(t, duplicateErr.Error(), "already exists", fmt.Sprintf("expected duplicate error, got %v", duplicateErr))
+	t.Logf("one translation creation should succeed: result1=%+v, result2=%+v", result1, result2)
+}
+
+func TestConcurrentRemoveTranslation(t *testing.T) {
+
+	db.ConnectTestGORM()
+	clearTestDB(t)
+
+	input := model.NewTranslationInput{
+		PolishWord:  "pisać",
+		EnglishWord: "write",
+		Examples: []*model.NewExampleInput{
+			{Sentence: "On lubi pisać listy."},
+		},
+	}
+
+	ctx := context.Background()
+	createdTranslation, _ := services.CreateTranslation(db.GormTestDB, ctx, input)
+	id := createdTranslation.ID
+
+	var mu sync.Mutex
+	cond := sync.NewCond(&mu)
+	start := false
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	var result1, result2 bool
+	var err1, err2 error
+
+	go func() {
+		defer wg.Done()
+		mu.Lock()
+		for !start {
+			cond.Wait()
+		}
+		mu.Unlock()
+		result1, err1 = services.RemoveTranslation(db.GormTestDB, ctx, id)
+	}()
+
+	go func() {
+		defer wg.Done()
+		mu.Lock()
+		for !start {
+			cond.Wait()
+		}
+		mu.Unlock()
+		result2, err2 = services.RemoveTranslation(db.GormTestDB, ctx, id)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	mu.Lock()
+	start = true
+	cond.Broadcast()
+	mu.Unlock()
+
+	wg.Wait()
+
+	if err1 == nil && err2 == nil {
+		t.Fatalf("expected one removal to fail due to non existing id, but both succeeded")
+	}
+	if err1 != nil && err2 != nil {
+		t.Fatalf("expected one removal to fail due to non existing id, but both failed")
+	}
+
+	var success bool
+	var recordNotFound error
+	if err1 == nil {
+		success = result1
+		recordNotFound = err2
+	} else {
+		success = result2
+		recordNotFound = err1
+	}
+
+	assert.True(t, success, "one removal should succeed: result1=%+v, result2=%+v", result1, result2)
+	assert.Contains(t, recordNotFound.Error(), "record not found", fmt.Sprintf("expected record not found error, got %v", recordNotFound))
+	t.Logf("one translation removal should succeed: result1=%+v, result2=%+v", result1, result2)
+}
+
+// I decided that testing concurrent updates isn't necessary since the most recent one will simply
+// override the previous update no matter which one is first, which is sufficient for this application
+
+// Test edge cases and errors
