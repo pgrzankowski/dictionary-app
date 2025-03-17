@@ -52,7 +52,7 @@ A GraphQL API built with Go, gqlgen, and GORM for managing translations of Polis
 To run unit tests execute:
 
 ```sh
-go test ./services
+go test -v -race ./services/
 ```
 
 This will run all tests since only services are tested.
