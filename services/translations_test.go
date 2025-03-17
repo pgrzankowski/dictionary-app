@@ -338,3 +338,39 @@ func TestConcurrentRemoveTranslation(t *testing.T) {
 }
 
 // Test edge cases and errors
+func TestRemoveNonExisting(t *testing.T) {
+
+	db.ConnectTestGORM()
+	clearTestDB(t)
+
+	ctx := context.Background()
+
+	result, err := services.RemoveTranslation(db.GormTestDB, ctx, "1")
+
+	assert.Error(t, err, "Error should be returned")
+	assert.Contains(t, err.Error(), "record not found", fmt.Sprintf("expected record not found, got: %v", err))
+	assert.False(t, result, "result should be false")
+}
+
+func TestCreateExisting(t *testing.T) {
+
+	db.ConnectTestGORM()
+	clearTestDB(t)
+
+	input := model.NewTranslationInput{
+		PolishWord:  "pisać",
+		EnglishWord: "write",
+		Examples: []*model.NewExampleInput{
+			{Sentence: "On lubi pisać listy."},
+		},
+	}
+
+	ctx := context.Background()
+
+	services.CreateTranslation(db.GormTestDB, ctx, input)
+
+	_, err := services.CreateTranslation(db.GormTestDB, ctx, input)
+
+	assert.Error(t, err, "Error should be returned")
+	assert.Contains(t, err.Error(), "already exists", fmt.Sprintf("expected already exists, got: %v", err))
+}
