@@ -9,6 +9,7 @@ import (
 	"github.com/pgrzankowski/dictionary-app/graph/model"
 	gormModels "github.com/pgrzankowski/dictionary-app/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func CreateTranslation(db *gorm.DB, ctx context.Context, input model.NewTranslationInput) (*model.Translation, error) {
@@ -18,22 +19,15 @@ func CreateTranslation(db *gorm.DB, ctx context.Context, input model.NewTranslat
 	}
 
 	var polishWord gormModels.PolishWord
-	err := transaction.Where("word = ?", input.PolishWord).First(&polishWord).Error
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			if err := transaction.Create(&gormModels.PolishWord{Word: input.PolishWord}).Error; err != nil {
-				transaction.Rollback()
-				return nil, fmt.Errorf("failed to create polish word: %w", err)
-			}
 
-			if err := transaction.Where("word = ?", input.PolishWord).First(&polishWord).Error; err != nil {
-				transaction.Rollback()
-				return nil, fmt.Errorf("failed to fetch polish word: %w", err)
-			}
-		} else {
-			transaction.Rollback()
-			return nil, fmt.Errorf("error checking for polish word: %w", err)
-		}
+	if err := transaction.Clauses(clause.OnConflict{DoNothing: true}).Create(&gormModels.PolishWord{Word: input.PolishWord}).Error; err != nil {
+		transaction.Rollback()
+		return nil, fmt.Errorf("failed to create polish word: %w", err)
+	}
+
+	if err := transaction.Where("word = ?", input.PolishWord).First(&polishWord).Error; err != nil {
+		transaction.Rollback()
+		return nil, fmt.Errorf("failed to fetch polish word: %w", err)
 	}
 
 	var existingTranslation gormModels.Translation
@@ -110,14 +104,15 @@ func RemoveTranslation(db *gorm.DB, ctx context.Context, id string) (bool, error
 		First(&translation, intID).
 		Error; err != nil {
 		transaction.Rollback()
-		return false, err
+		return false, fmt.Errorf("failed to fetch translation: %w", err)
 	}
 
 	polishWordID := translation.PolishWordID
 
-	if err := transaction.Delete(&translation).Error; err != nil {
+	if err := transaction.
+		Delete(&translation).Error; err != nil {
 		transaction.Rollback()
-		return false, err
+		return false, fmt.Errorf("failed to delete translation: %w", err)
 	}
 
 	var translationCount int64
@@ -125,19 +120,20 @@ func RemoveTranslation(db *gorm.DB, ctx context.Context, id string) (bool, error
 		Where("polish_word_id = ?", polishWordID).
 		Count(&translationCount).Error; err != nil {
 		transaction.Rollback()
-		return false, err
+		return false, fmt.Errorf("failed to count translations: %w", err)
 	}
 
 	if translationCount == 0 {
-		if err := transaction.Delete(&gormModels.PolishWord{}, polishWordID).
+		if err := transaction.
+			Delete(&gormModels.PolishWord{}, polishWordID).
 			Error; err != nil {
 			transaction.Rollback()
-			return false, nil
+			return false, fmt.Errorf("failed to delete polish word: %w", err)
 		}
 	}
 
 	if err := transaction.Commit().Error; err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return true, nil
