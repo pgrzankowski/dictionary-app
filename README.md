@@ -28,6 +28,12 @@ A GraphQL API built with Go, gqlgen, and GORM for managing translations of Polis
     DB_PASS=password
     DB_NAME=dbname
     DB_PORT=5432
+
+    DB_TEST_HOST=localhost
+    DB_TEST_USER=admin
+    DB_TEST_PASS=pass
+    DB_TEST_NAME=dictionary-db-test
+    DB_TEST_PORT=5430
    ```
 
 4. **Run the Application**
@@ -76,7 +82,7 @@ This will run all tests since only services are tested.
   Database configuration is managed through the `.env` file.
 
 - **Testing:**  
-  Unit tests use Go's built-in testing package along with [sqlmock](https://github.com/DATA-DOG/go-sqlmock) for mocking database interactions.
+  Tests are based on exact copy of the main database to provide real value. To run them the docker container with test database must be running.
 
 ## Query examples
 
